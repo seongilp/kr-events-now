@@ -29,8 +29,9 @@ const LIST_ROWS = 300; // 박물관 최대 ~127, 미술관 ~73 → 한 페이지
  */
 const DETAIL_CONCURRENCY = 6;
 const REQUEST_INTERVAL_MS = 230; // ≈4.3 req/s. 언어당 ~198건이면 ≤45s(maxDuration 60 내).
-/** 초당 제한(23)일 때만 재시도. 일일 쿼터(22) 등은 재시도하지 않는다(하루종일 막혀 있음). */
+/** 초당 제한(23)일 때만 재시도. 일일 쿼터(22)는 재시도 않고 배치를 조기 중단한다. */
 const THROTTLE_CODE = '23';
+const DAILY_QUOTA_CODE = '22';
 const RETRY_BACKOFF_MS = [600, 1200, 2000];
 
 function serviceKey(): string {
@@ -112,6 +113,9 @@ export async function fetchIntrosBatch(
 ): Promise<Map<string, MuseumIntroRaw | null>> {
   const out = new Map<string, MuseumIntroRaw | null>();
   let cursor = 0;
+  // 일일 쿼터 소진(코드 22)이 감지되면 나머지를 중단한다 — 소진된 쿼터에 200콜을 더
+  // 던져 봐야 전부 실패다. 목록(제목·좌표)은 이미 확보돼 있으므로 상세만 결측으로 둔다.
+  let dailyQuotaHit = false;
   // pacer: 다음 요청을 출발시킬 수 있는 가장 이른 시각. 워커들이 이 슬롯을 나눠 가져
   // 시작 간격을 REQUEST_INTERVAL_MS 로 강제한다(초당 한도 방어).
   let nextSlot = Date.now();
@@ -122,14 +126,15 @@ export async function fetchIntrosBatch(
     if (slot > now) await sleep(slot - now);
   }
   async function worker(): Promise<void> {
-    while (cursor < ids.length) {
+    while (cursor < ids.length && !dailyQuotaHit) {
       const id = ids[cursor];
       cursor += 1;
       await pace();
       try {
         out.set(id, await fetchMuseumIntro(service, id));
-      } catch {
+      } catch (e) {
         out.set(id, null); // 개별 실패는 흡수(부분 결측), 배치는 계속.
+        if (e instanceof KtoApiFailure && e.code === DAILY_QUOTA_CODE) dailyQuotaHit = true;
       }
     }
   }

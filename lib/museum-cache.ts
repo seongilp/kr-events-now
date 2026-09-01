@@ -12,14 +12,17 @@
 
 import { fetchIntrosBatch, fetchMuseumList } from './museum-api';
 import { normalizeMuseum, type Museum } from './museums';
-import { KtoApiFailure } from './kto-api';
 import { msUntilKstMidnight, todayYmdKst } from './kst';
 
 /**
- * 상세 병합률이 이보다 낮으면 배치가 throttle 등으로 대부분 실패한 것 → 캐시하지 않고 실패로
- * 던진다(F-4). 부분 결측을 자정까지 굳혀 "오늘 여는 곳" 판정을 반나절 망치는 걸 막는다.
+ * 상세(휴관일) 병합률 임계치. 이 이상이면 정상으로 보고 자정까지 캐시한다.
+ * 미만이면 상세 쿼터(코드 22)·throttle 로 대부분 실패한 것 — **목록(제목·좌표·종류)은
+ * 여전히 유효하므로 레이어를 죽이지 않고 그대로 내보내되**, 자정까지 굳히지 않고 짧게만
+ * 캐시해 쿼터가 풀리면 곧 다시 채운다. (제목의 한글 정리는 목록 단계라 상세와 무관하다.)
  */
-const MIN_INTRO_COVERAGE = 0.7;
+export const MIN_INTRO_COVERAGE = 0.7;
+/** 상세 병합률이 낮을 때의 짧은 캐시 수명(분). 상세 쿼터 회복 후 재시도되도록. */
+const LOW_COVERAGE_TTL_MS = 10 * 60 * 1000;
 
 interface Entry {
   expiresAt: number;
@@ -46,16 +49,10 @@ async function build(service: string): Promise<Entry> {
     .filter((m): m is Museum => m !== null);
 
   const introCoverage = list.length ? introOk / list.length : 0;
-  // 배치가 대부분 실패했으면(초당 제한 지속 등) 캐시 금지 — 예외로 던져 다음 요청이 재시도.
-  if (list.length > 0 && introCoverage < MIN_INTRO_COVERAGE) {
-    throw new KtoApiFailure('PARTIAL', `intro coverage too low: ${introCoverage.toFixed(2)}`);
-  }
-
-  return {
-    expiresAt: Date.now() + msUntilKstMidnight(),
-    museums,
-    introCoverage,
-  };
+  // 상세가 충분하면 자정까지, 부족하면(쿼터·throttle) 짧게만 캐시. 어느 쪽이든 목록은 내보낸다
+  // — 제목·좌표는 상세와 무관하게 유효하므로 상세 쿼터 때문에 레이어를 통째로 죽이지 않는다.
+  const ttl = introCoverage >= MIN_INTRO_COVERAGE ? msUntilKstMidnight() : LOW_COVERAGE_TTL_MS;
+  return { expiresAt: Date.now() + ttl, museums, introCoverage };
 }
 
 /** 한 언어(서비스)의 박물관+미술관(상세 병합). 성공 시 KST 자정까지 캐시. */

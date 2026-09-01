@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-import { getMuseumsCached } from '@/lib/museum-cache';
+import { getMuseumsCached, MIN_INTRO_COVERAGE } from '@/lib/museum-cache';
 import { isLocale, SERVICE_BY_LOCALE } from '@/lib/i18n';
 import { msUntilKstMidnight, todayYmdKst } from '@/lib/kst';
 
@@ -22,12 +22,14 @@ export async function GET(req: Request) {
 
   try {
     const { museums, introCoverage } = await getMuseumsCached(SERVICE_BY_LOCALE[lang]);
+    // 상세 병합률이 낮으면(쿼터·throttle) 자정까지 굳히지 않고 짧게(5분)만 캐시해 곧 재시도.
     const secToMidnight = Math.max(60, Math.floor(msUntilKstMidnight() / 1000));
+    const sMaxAge = introCoverage >= MIN_INTRO_COVERAGE ? secToMidnight : 300;
     return NextResponse.json(
       { museums, today: todayYmdKst(), count: museums.length, introCoverage },
       {
         headers: {
-          'Cache-Control': `public, s-maxage=${secToMidnight}, stale-while-revalidate=1800`,
+          'Cache-Control': `public, s-maxage=${sMaxAge}, stale-while-revalidate=1800`,
         },
       },
     );
