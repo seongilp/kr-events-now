@@ -64,6 +64,13 @@ describe('normalizeMuseum — 좌표·cat3 없으면 버린다, 결측은 비운
     assert.equal(normalizeMuseum({ ...base, cat3: 'A02060300' }, null), null);
     assert.equal(normalizeMuseum({ ...base, cat3: '' }, null), null);
   });
+  it('제목의 한글 원제를 벗긴다(구분자 없이 붙은 것도)', () => {
+    const m = normalizeMuseum({ ...base, title: '国立金海博物馆국립김해박물관' }, null)!;
+    assert.equal(m.title, '国立金海博物馆');
+  });
+  it('제목이 한국어뿐이면 항목을 드롭한다("제목 없음"을 화면에 내보내지 않음)', () => {
+    assert.equal(normalizeMuseum({ ...base, title: '국립김해박물관' }, null), null);
+  });
   it('상세가 없어도(null) 목록만으로 정규화된다(휴관일 결측)', () => {
     const m = normalizeMuseum(base, null)!;
     assert.equal(m.restRaw, null);

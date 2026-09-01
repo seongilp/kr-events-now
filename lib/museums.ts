@@ -11,7 +11,7 @@
  *  - 결측은 결측으로. 한글이 섞인 주소는 외국인에게 못 읽으니 비운다(축제와 동일 규칙).
  */
 
-import { cleanTitle, containsHangul } from './festivals';
+import { cleanForeignTitle, containsHangul } from './festivals';
 
 export const CAT3_MUSEUM = 'A02060100';
 export const CAT3_GALLERY = 'A02060500';
@@ -105,11 +105,16 @@ export function normalizeMuseum(
   const lat = numOrNull(list.mapy);
   if (!id || !kind || lat == null || lon == null) return null;
 
+  // 제목의 한글 원제를 벗긴다. 외국어 표기가 하나도 없으면(제목이 한국어뿐이면) '' 이 되는데,
+  // 그때는 **항목을 드롭한다**(좌표 결측과 동일). "제목 없음"을 화면에 내보내지 않기 위함이다.
+  const title = cleanForeignTitle(list.title);
+  if (!title) return null;
+
   const addrJoined = [list.addr1?.trim(), list.addr2?.trim()].filter(Boolean).join(' ').trim();
 
   return {
     id,
-    title: cleanTitle(list.title),
+    title,
     kind,
     addr: addrJoined && !containsHangul(addrJoined) ? addrJoined : null,
     lat,

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
 import {
+  cleanForeignTitle,
   cleanTitle,
   inWindow,
   itemsOf,
@@ -79,6 +80,51 @@ describe('cleanTitle — 외국어 뒤의 한글 원제 괄호를 벗긴다(F-2)
       cleanTitle('〈陶器，我们的生活之器〉〈도기陶器, 우리를 담은 질그릇〉'),
       '〈陶器，我们的生活之器〉',
     );
+  });
+});
+
+describe('cleanForeignTitle — 박물관 제목의 한글 누출(구분자없음/대괄호/짝안맞는괄호) 제거', () => {
+  it('구분자 없이 붙은 한글 꼬리 제거(중국어 서비스)', () => {
+    assert.equal(cleanForeignTitle('国立金海博物馆국립김해박물관'), '国立金海博物馆');
+    assert.equal(cleanForeignTitle('国立韩文博物馆국립한글박물관'), '国立韩文博物馆');
+    assert.equal(cleanForeignTitle('釜山博物馆부산박물관'), '釜山博物馆');
+    assert.equal(cleanForeignTitle('秋史博物馆추사박물관'), '秋史博物馆');
+    assert.equal(cleanForeignTitle('足球主题博物馆풋볼 팬타지움'), '足球主题博物馆');
+  });
+  it('대괄호 [ ] 안 한글 원제 제거', () => {
+    assert.equal(
+      cleanForeignTitle('Alive Museum (Insa-dong Branch) [박물관은 살아있다(인사동점)]'),
+      'Alive Museum (Insa-dong Branch)',
+    );
+  });
+  it('공백 뒤 한글 런 제거(한자 괄호는 남긴다)', () => {
+    assert.equal(cleanForeignTitle('健康与性博物馆(济州)  건강과 성 박물관'), '健康与性博物馆(济州)');
+    assert.equal(cleanForeignTitle('国立现代美术馆(德寿宫馆)국립현대미술관'), '国立现代美术馆(德寿宫馆)');
+    assert.equal(cleanForeignTitle('Junk Art Gallery (5Factory) 정크아트갤러리'), 'Junk Art Gallery (5Factory)');
+  });
+  it('한글 든 전각 괄호 제거 + 뒤 한글 런 제거', () => {
+    assert.equal(cleanForeignTitle('猪庭（来看猪就행了）피아뜰'), '猪庭');
+  });
+  it('한글 없는 괄호는 남긴다(한자·라틴 원제)', () => {
+    assert.equal(
+      cleanForeignTitle('废品艺术工厂（Oh Daeho艺术工厂）정크아트갤러리'),
+      '废品艺术工厂（Oh Daeho艺术工厂）',
+    );
+  });
+  it('짝이 안 맞는 뒤 닫는 괄호 정리', () => {
+    assert.equal(
+      cleanForeignTitle('Sweet Park 乐天儿童食品体验馆 (스위트파크 롯데 어린이 식품체험관)）'),
+      'Sweet Park 乐天儿童食品体验馆',
+    );
+  });
+  it('한자·가나는 한글이 아니므로 건드리지 않는다', () => {
+    assert.equal(cleanForeignTitle('首爾燈節'), '首爾燈節');
+    assert.equal(cleanForeignTitle('ソウルランタンフェスティバル'), 'ソウルランタンフェスティバル');
+  });
+  it('외국어 표기가 하나도 없으면(한국어뿐) 빈 문자열 → 호출부가 결측 처리', () => {
+    assert.equal(cleanForeignTitle('국립김해박물관'), '');
+    assert.equal(cleanForeignTitle('피아뜰'), '');
+    assert.equal(cleanForeignTitle('(축제)'), '');
   });
 });
 

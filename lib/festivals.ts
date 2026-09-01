@@ -87,14 +87,6 @@ export function parseApiError(json: unknown): { code: string; msg: string } | nu
   return null;
 }
 
-/**
- * 제목에서 뒤에 붙은 한글 원제 괄호를 벗긴다.
- *
- * 외국어 서비스의 title 은 "APAP Artwork Tour (APAP 작품투어 (안양공공예술프로젝트))"
- * 처럼 **외국어 제목 뒤에 한글 원제를 괄호로** 달아 준다. 외국인에게 한글을 노출하지
- * 말라는 규칙(F-2/규칙)에 따라, **한글이 포함된 맨 뒤 괄호 덩어리**만 제거한다.
- * 괄호 안에 한글이 없으면(예: "Seoul (Main)") 정보이므로 건드리지 않는다.
- */
 /** 한글(자모 포함)이 하나라도 들어 있으면 true. */
 export function containsHangul(s: string | undefined | null): boolean {
   // 한글 음절(AC00–D7A3) + 한글 호환 자모(3131–3163). CJK 한자는 제외 — 중국어 서비스의
@@ -102,40 +94,74 @@ export function containsHangul(s: string | undefined | null): boolean {
   return !!s && /[가-힣ㄱ-ㅣ]/.test(s);
 }
 
-// 반각·전각 소괄호 + CJK 각종 묶음괄호(〈〉《》「」『』【】). 관광공사 외국어 제목은
-// 원제(한글)를 이 중 아무 괄호로나 뒤에 달아 준다 — 실측에서 () （）〈〉 세 종류가 나왔다.
-const OPENERS = new Set(['(', '（', '〈', '《', '「', '『', '【']);
-const CLOSERS = new Set([')', '）', '〉', '》', '」', '』', '】']);
+// 반각·전각 소괄호 + 대괄호 + CJK 각종 묶음괄호. 관광공사 외국어 제목은 원제(한글)를
+// 이 중 아무 괄호로나 뒤에 달아 준다 — 실측: 축제는 () （）〈〉, 박물관은 [] 도 나온다.
+const OPENERS = new Set(['(', '（', '〈', '《', '「', '『', '【', '[', '［']);
+const CLOSERS = new Set([')', '）', '〉', '》', '」', '』', '】', ']', '］']);
+// 한글 덩어리를 뗀 뒤 꼬리에 남는 구분자·중복 공백. 이것들만(한글 인접 시) 정리한다.
+const TAIL_SEP = '\\s·・･\\u00b7\\-–—/,、，';
+const TRAIL_JUNK = new RegExp(`[${TAIL_SEP}:：|]+$`);
+const TRAIL_HANGUL = new RegExp(`[${TAIL_SEP}]*[가-힣ㄱ-ㅣ][가-힣ㄱ-ㅣ${TAIL_SEP}]*$`);
 
-export function cleanTitle(raw: string | undefined): string {
+/**
+ * 외국어 제목에서 **한글(한국어)만** 벗겨 낸 결과. 외국어 표기가 하나도 안 남으면 빈 문자열.
+ *
+ * 외국어 서비스 title 은 외국어 뒤에 한글 원제를 붙여 준다. 형태가 다양하다(박물관 실측):
+ *  - 괄호 원제: "Alive Museum (Insa-dong Branch) [박물관은 살아있다(인사동점)]"  → 대괄호 포함
+ *  - 구분자 없이 그냥 붙음: "国立金海博物馆국립김해박물관"                        → 꼬리 한글 런
+ *  - 짝 안 맞는 닫는 괄호: "... (스위트파크 …)）"                               → 짝 없는 ) 한 글자 정리
+ * 한글이 든 **괄호 그룹**과 **끝에 붙은 한글 런**을 안정될 때까지 번갈아 제거한다. 한자·가나는
+ * 건드리지 않는다(containsHangul 이 한글만 대상). 남은 게 없거나 여전히 한글이 섞이면 ''.
+ */
+export function cleanForeignTitle(raw: string | undefined): string {
   if (!raw) return '';
   let s = raw.trim();
-  // 맨 끝의 **균형 잡힌** 괄호 그룹을 반복 제거하되, 한글이 든 것만 벗긴다.
-  // 일본어·중국어 서비스는 반각 () 이 아니라 **전각 （）** 을 쓰므로 둘 다 처리한다.
-  // 마지막 닫는 괄호의 짝 여는 괄호를 깊이 스캔으로 찾아, 중첩까지 한 그룹으로 통째 지운다.
-  for (;;) {
-    s = s.trimEnd();
-    const last = s[s.length - 1];
-    if (!last || !CLOSERS.has(last)) break;
-    let depth = 0;
-    let open = -1;
-    for (let i = s.length - 1; i >= 0; i -= 1) {
-      const c = s[i];
-      if (CLOSERS.has(c)) depth += 1;
-      else if (OPENERS.has(c)) {
-        depth -= 1;
-        if (depth === 0) {
-          open = i;
-          break;
+  let prev = '';
+  while (s !== prev) {
+    prev = s;
+    // (1) 끝의 괄호 그룹: 한글 든 것만 제거. 짝 없는 닫는 괄호는 한 글자만 떼고 계속.
+    for (;;) {
+      s = s.replace(TRAIL_JUNK, '').trimEnd();
+      const last = s[s.length - 1];
+      if (!last || !CLOSERS.has(last)) break;
+      let depth = 0;
+      let open = -1;
+      for (let i = s.length - 1; i >= 0; i -= 1) {
+        const c = s[i];
+        if (CLOSERS.has(c)) depth += 1;
+        else if (OPENERS.has(c)) {
+          depth -= 1;
+          if (depth === 0) {
+            open = i;
+            break;
+          }
         }
       }
+      if (open === -1) {
+        s = s.slice(0, -1); // 짝 없는 닫는 괄호 → 그 한 글자만 제거
+        continue;
+      }
+      const group = s.slice(open);
+      if (!containsHangul(group)) break; // 한글 없으면 정보 → 남긴다
+      s = s.slice(0, open);
     }
-    if (open === -1) break; // 짝이 안 맞으면 건드리지 않는다
-    const group = s.slice(open); // 여는 괄호부터 끝까지(중첩 포함)
-    if (!containsHangul(group)) break; // 한글 없으면 정보 → 남긴다
-    s = s.slice(0, open).trim();
+    // (2) 끝에 구분자 없이 붙은 한글 꼬리 제거("…博物馆국립…박물관" → "…博物馆").
+    s = s.replace(TRAIL_HANGUL, '');
   }
-  return s || raw.trim();
+  s = s.replace(TRAIL_JUNK, '').trim();
+  // 남은 게 없거나 여전히 한글이 섞이면 외국어 제목으로 못 쓴다 → '' (호출부가 결측 처리).
+  if (!s || containsHangul(s)) return '';
+  return s;
+}
+
+/**
+ * 축제용 제목 정리. cleanForeignTitle 로 한글을 벗기되, 완전히 비면 원문을 돌려준다
+ * (축제 제목은 항상 외국어 표기가 있어 이 폴백에 도달하지 않는다 — 안전장치).
+ * 박물관은 결측 처리가 필요하므로 cleanForeignTitle 을 직접 쓴다(빈 문자열 → 항목 드롭).
+ */
+export function cleanTitle(raw: string | undefined): string {
+  if (!raw) return '';
+  return cleanForeignTitle(raw) || raw.trim();
 }
 
 const numOrNull = (v: string | undefined): number | null => {
