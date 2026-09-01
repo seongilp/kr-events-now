@@ -3,34 +3,27 @@
 import maplibregl, { type Map as MapLibreMap } from 'maplibre-gl';
 import { useEffect, useRef } from 'react';
 
-import type { EventPhase } from '@/lib/festivals';
 import type { LatLon } from '@/lib/geo';
 
 import 'maplibre-gl/dist/maplibre-gl.css';
 
 /**
- * 축제 지도. MapLibre **v5** — v6 는 Turbopack 에서 워커 로딩이 실패해 지도가 조용히 안 뜬다
- * (메모리 기록, 직접 당함). 좌표는 WGS84(lon,lat)를 API 가 직접 준다.
+ * 지도(축제·박물관 공용). MapLibre **v5** — v6 는 Turbopack 에서 워커 로딩이 실패해 지도가
+ * 조용히 안 뜬다(메모리 기록, 직접 당함). 좌표는 WGS84(lon,lat)를 API 가 직접 준다.
  *
- * 축제는 언어당 100~170건 수준이라 클러스터링 없이 개별 마커로 찍는다. 색은 진행 상태(phase)
- * 한 곳에서만 온다 — 지도와 리스트 배지가 갈라지지 않게.
+ * 언어당 수백 건 수준이라 클러스터링 없이 개별 마커로 찍는다. 색(color)은 **호출부가** 정한다
+ * — 축제는 진행 상태(phase), 박물관은 개관 상태(open/closed/unknown). 지도와 리스트 배지가
+ * 갈라지지 않게 색은 한 곳(호출부)에서만 계산해 넘긴다.
  */
 
 export interface MapPoint {
   id: string;
   lon: number;
   lat: number;
-  phase: EventPhase;
+  /** 마커 색(호출부가 상태에서 계산). */
+  color: string;
   title: string;
 }
-
-/** 상태별 마커 색. 리스트 배지와 동일 팔레트(phaseTone)와 맞춘다. */
-const PHASE_COLOR: Record<EventPhase, string> = {
-  ongoing: '#22c55e', // 진행중 — 초록
-  today: '#f59e0b', // 오늘 마감 — 주황
-  upcoming: '#3b82f6', // 예정 — 파랑(토스 블루 계열)
-  ended: '#6b7280', // 종료 — 회색(보통 필터로 안 보임)
-};
 
 const BASEMAP_STYLE = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json';
 const KOREA_BOUNDS: [[number, number], [number, number]] = [
@@ -46,7 +39,7 @@ function toGeoJson(points: MapPoint[]): GeoJSON.FeatureCollection {
     features: points.map((p) => ({
       type: 'Feature',
       geometry: { type: 'Point', coordinates: [p.lon, p.lat] },
-      properties: { id: p.id, title: p.title, color: PHASE_COLOR[p.phase] },
+      properties: { id: p.id, title: p.title, color: p.color },
     })),
   };
 }

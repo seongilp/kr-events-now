@@ -1,19 +1,19 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { AlertCircle, Loader2, MapPin } from 'lucide-react';
+import { AlertCircle, Info, Loader2, MapPin } from 'lucide-react';
 
-import type { Festival, FestivalStatus, TimeWindow } from '@/lib/festivals';
-import { inWindow, statusOf } from '@/lib/festivals';
+import type { Museum } from '@/lib/museums';
+import { openTodayState, type OpenState } from '@/lib/restday';
+import { kstToday } from '@/lib/kst';
 import { haversineKm, SEOUL, type LatLon } from '@/lib/geo';
 import { dict, type Locale } from '@/lib/i18n';
+import { OPEN_STATE_COLOR } from '@/lib/museum-ui';
 import { cn } from '@/lib/utils';
-import { EventCard } from '@/components/event-card';
-import { EventDetail } from '@/components/event-detail';
+import { MuseumCard } from '@/components/museum-card';
+import { MuseumDetail } from '@/components/museum-detail';
 import { EventsMap, type MapPoint } from '@/components/events-map';
-import { PHASE_COLOR } from '@/lib/phase';
 
-/** 위치 상태를 명확히 구분한다(무한 로딩 금지, F-6). */
 type GeoState =
   | { kind: 'locating' }
   | { kind: 'granted'; at: LatLon }
@@ -21,43 +21,43 @@ type GeoState =
   | { kind: 'unavailable' }
   | { kind: 'unsupported' };
 
-/** 목록 로딩 상태. "0건"과 "로딩중"과 "실패"를 절대 섞지 않는다(F-6). */
 type ListState =
   | { kind: 'loading' }
   | { kind: 'error'; code?: string }
-  | { kind: 'ready'; festivals: Festival[] };
+  | { kind: 'ready'; museums: Museum[] };
+
+type MuseumFilter = 'all' | 'open';
 
 interface Ranked {
-  festival: Festival;
-  status: FestivalStatus;
+  museum: Museum;
+  state: OpenState;
   distanceKm: number | null;
 }
 
-const WINDOWS: TimeWindow[] = ['weekend', 'twoweeks', 'upcoming'];
-
-export function EventsBrowser({ locale }: { locale: Locale }) {
+export function MuseumsBrowser({ locale }: { locale: Locale }) {
   const d = dict(locale);
   const [list, setList] = useState<ListState>({ kind: 'loading' });
   const [geo, setGeo] = useState<GeoState>({ kind: 'locating' });
-  const [window, setWindow] = useState<TimeWindow>('twoweeks');
+  const [filter, setFilter] = useState<MuseumFilter>('all');
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  // 상태·정렬의 기준 시각을 마운트에 고정 — 렌더마다 흔들리지 않게.
   const nowRef = useRef(Date.now());
+  // 개관 판정 기준 '오늘'은 KST 에폭 일수 정수(자정 경계에서 안 밀린다).
+  const epochDay = kstToday(nowRef.current);
 
-  /* 목록 로드. 실패는 "결측"이 아니라 "실패" 상태로. */
+  /* 목록 로드(상세 휴관일 병합본). 실패는 "결측"이 아니라 "실패" 상태로. */
   useEffect(() => {
     let alive = true;
     setList({ kind: 'loading' });
-    fetch(`/api/festivals?lang=${locale}`)
+    fetch(`/api/museums?lang=${locale}`)
       .then(async (r) => {
         if (!r.ok) {
           const body = (await r.json().catch(() => ({}))) as { code?: string };
           throw Object.assign(new Error('upstream'), { code: body.code });
         }
-        return r.json() as Promise<{ festivals: Festival[] }>;
+        return r.json() as Promise<{ museums: Museum[] }>;
       })
       .then((json) => {
-        if (alive) setList({ kind: 'ready', festivals: json.festivals });
+        if (alive) setList({ kind: 'ready', museums: json.museums });
       })
       .catch((e: { code?: string }) => {
         if (alive) setList({ kind: 'error', code: e?.code });
@@ -67,8 +67,7 @@ export function EventsBrowser({ locale }: { locale: Locale }) {
     };
   }, [locale]);
 
-  /* 위치. map 화면에 들어온 건 "내 주변"을 보겠다는 의도라 진입 시 한 번 요청한다.
-     거부/불가/미지원을 각각 다른 상태로 두고, 어느 경우든 서울로 폴백해 계속 동작한다. */
+  /* 위치. 진입 시 한 번 요청, 거부/불가/미지원을 각각 다른 상태로 두고 서울로 폴백. */
   useEffect(() => {
     if (!('geolocation' in navigator)) {
       setGeo({ kind: 'unsupported' });
@@ -99,72 +98,76 @@ export function EventsBrowser({ locale }: { locale: Locale }) {
     );
   };
 
-  // 거리 계산의 중심: 위치가 있으면 그 위치, 없으면 서울(폴백).
   const center: LatLon | null = geo.kind === 'granted' ? geo.at : null;
   const origin: LatLon = center ?? SEOUL;
   const hasRealLocation = geo.kind === 'granted';
 
-  /* 필터 + 상태 + 거리 계산 + 거리순 정렬. */
-  const ranked: Ranked[] = useMemo(() => {
+  /* 상태 판정 + 거리 + 거리순 정렬(필터는 아래에서 별도로). */
+  const rankedAll: Ranked[] = useMemo(() => {
     if (list.kind !== 'ready') return [];
-    const now = nowRef.current;
-    return list.festivals
-      .filter((f) => inWindow(f, window, now))
-      .map((f) => ({
-        festival: f,
-        status: statusOf(f, now),
-        // 진짜 위치가 없으면 거리를 "미상"으로 둔다 — 서울 기준 거리를 진짜인 척 하지 않는다.
-        distanceKm: hasRealLocation ? haversineKm(origin, { lat: f.lat, lon: f.lon }) : null,
+    return list.museums
+      .map((m) => ({
+        museum: m,
+        state: openTodayState(m.restRaw, epochDay),
+        distanceKm: hasRealLocation ? haversineKm(origin, { lat: m.lat, lon: m.lon }) : null,
       }))
       .sort((a, b) => {
         if (a.distanceKm != null && b.distanceKm != null) return a.distanceKm - b.distanceKm;
-        // 거리 미상이면 시작일 가까운 순.
-        return a.festival.startYmd.localeCompare(b.festival.startYmd);
+        return a.museum.title.localeCompare(b.museum.title);
       });
-  }, [list, window, origin, hasRealLocation]);
+  }, [list, origin, hasRealLocation, epochDay]);
+
+  const ranked = useMemo(
+    () => (filter === 'open' ? rankedAll.filter((r) => r.state === 'open') : rankedAll),
+    [rankedAll, filter],
+  );
+
+  // "오늘 여는 곳"에서 판정 불가로 빠진 건수 — 조용히 숨기지 않고 화면에 밝힌다.
+  const undeterminedHidden = useMemo(
+    () => (filter === 'open' ? rankedAll.filter((r) => r.state === 'unknown').length : 0),
+    [rankedAll, filter],
+  );
 
   const points: MapPoint[] = useMemo(
     () =>
       ranked.map((r) => ({
-        id: r.festival.id,
-        lon: r.festival.lon,
-        lat: r.festival.lat,
-        color: PHASE_COLOR[r.status.phase],
-        title: r.festival.title,
+        id: r.museum.id,
+        lon: r.museum.lon,
+        lat: r.museum.lat,
+        color: OPEN_STATE_COLOR[r.state],
+        title: r.museum.title,
       })),
     [ranked],
   );
 
-  const selected = ranked.find((r) => r.festival.id === selectedId) ?? null;
+  const selected = ranked.find((r) => r.museum.id === selectedId) ?? null;
 
   return (
     <>
-      {/* 시간 필터 */}
+      {/* 필터: 전체 / 오늘 여는 곳 */}
       <div className="flex gap-2 overflow-x-auto border-b border-border px-4 py-2">
-        {WINDOWS.map((w) => (
+        {(['all', 'open'] as MuseumFilter[]).map((f) => (
           <button
-            key={w}
+            key={f}
             type="button"
-            onClick={() => setWindow(w)}
+            onClick={() => setFilter(f)}
             className={cn(
               'shrink-0 rounded-full border px-3 py-1 text-xs font-medium transition-colors',
-              w === window
+              f === filter
                 ? 'border-primary bg-primary text-primary-foreground'
                 : 'border-border text-muted-foreground hover:text-foreground',
             )}
           >
-            {w === 'weekend' ? d.filterWeekend : w === 'twoweeks' ? d.filterTwoWeeks : d.filterUpcoming}
+            {f === 'all' ? d.filterAllMuseums : d.filterOpenToday}
           </button>
         ))}
       </div>
 
-      {/* 위치 상태 배너: 폴백/거부/불가를 명확히. granted 면 배너 없음. */}
+      {/* 위치 배너 */}
       {geo.kind !== 'granted' && geo.kind !== 'locating' && (
         <div className="flex items-center gap-2 border-b border-border bg-amber-500/10 px-4 py-2 text-xs text-amber-300">
           <MapPin className="size-3.5 shrink-0" />
-          <span className="flex-1">
-            {geo.kind === 'denied' ? d.locationDenied : d.locationUnavailable}
-          </span>
+          <span className="flex-1">{geo.kind === 'denied' ? d.locationDenied : d.locationUnavailable}</span>
           {geo.kind !== 'unsupported' && (
             <button
               type="button"
@@ -177,11 +180,20 @@ export function EventsBrowser({ locale }: { locale: Locale }) {
         </div>
       )}
 
-      {/* 지도가 첫 화면: 위쪽에 크게. 리스트는 그 아래. 데스크톱은 좌우 분할. */}
+      {/* 판정 불가 고지 — "오늘 여는 곳" 필터가 조용히 숨긴 게 아님을 밝힌다. */}
+      {undeterminedHidden > 0 && (
+        <div className="flex items-center gap-2 border-b border-border bg-muted/40 px-4 py-2 text-xs text-muted-foreground">
+          <Info className="size-3.5 shrink-0" />
+          <span>{d.undeterminedNote(undeterminedHidden)}</span>
+        </div>
+      )}
+
       <div className="flex min-h-0 flex-1 flex-col sm:flex-row-reverse">
         {/* 지도 */}
         <div className="relative h-[45dvh] w-full shrink-0 sm:h-auto sm:flex-1">
-          {list.kind === 'ready' && <EventsMap points={points} center={center} selectedId={selectedId} onSelect={setSelectedId} />}
+          {list.kind === 'ready' && (
+            <EventsMap points={points} center={center} selectedId={selectedId} onSelect={setSelectedId} />
+          )}
           {list.kind === 'loading' && (
             <div className="flex size-full items-center justify-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="size-4 animate-spin" />
@@ -206,10 +218,10 @@ export function EventsBrowser({ locale }: { locale: Locale }) {
         {/* 리스트 */}
         <div className="flex min-h-0 flex-1 flex-col sm:w-96 sm:flex-none sm:border-r sm:border-border">
           <div className="flex items-baseline justify-between px-4 py-2 text-xs text-muted-foreground">
-            <span className="font-medium text-foreground">{d.nearbyEvents}</span>
+            <span className="font-medium text-foreground">{d.nearbyMuseums}</span>
             {list.kind === 'ready' && (
               <span>
-                {d.eventsCount(ranked.length)}
+                {d.placesCount(ranked.length)}
                 {hasRealLocation ? ` · ${d.sortByDistance}` : ` · ${d.locationFallback}`}
               </span>
             )}
@@ -219,20 +231,20 @@ export function EventsBrowser({ locale }: { locale: Locale }) {
             {list.kind === 'ready' && ranked.length === 0 && (
               <div className="flex flex-col items-center gap-2 py-12 text-center">
                 <MapPin className="size-8 text-muted-foreground/50" />
-                <p className="text-sm font-medium">{d.emptyNearby}</p>
-                <p className="text-xs text-muted-foreground">{d.emptyNearbyHint}</p>
+                <p className="text-sm font-medium">{d.emptyMuseums}</p>
+                <p className="text-xs text-muted-foreground">{d.emptyMuseumsHint}</p>
               </div>
             )}
             {list.kind === 'ready' &&
               ranked.map((r) => (
-                <EventCard
-                  key={r.festival.id}
-                  festival={r.festival}
-                  status={r.status}
+                <MuseumCard
+                  key={r.museum.id}
+                  museum={r.museum}
+                  state={r.state}
                   distanceKm={r.distanceKm}
                   locale={locale}
-                  selected={r.festival.id === selectedId}
-                  onSelect={() => setSelectedId(r.festival.id)}
+                  selected={r.museum.id === selectedId}
+                  onSelect={() => setSelectedId(r.museum.id)}
                 />
               ))}
             {list.kind === 'loading' &&
@@ -243,12 +255,12 @@ export function EventsBrowser({ locale }: { locale: Locale }) {
         </div>
       </div>
 
-      {/* 상세 시트: 모바일은 하단, 데스크톱은 우하단 카드 */}
+      {/* 상세 시트 */}
       {selected && (
         <div className="fixed inset-x-0 bottom-0 z-20 sm:inset-auto sm:bottom-4 sm:right-4 sm:w-96">
-          <EventDetail
-            festival={selected.festival}
-            status={selected.status}
+          <MuseumDetail
+            museum={selected.museum}
+            state={selected.state}
             distanceKm={selected.distanceKm}
             locale={locale}
             onClose={() => setSelectedId(null)}

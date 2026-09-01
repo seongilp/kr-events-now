@@ -43,6 +43,36 @@ export function ymdToDay(value: string | undefined | null): number | null {
   return ms / DAY_MS;
 }
 
+/**
+ * 에폭 일수 → 요일. 0=일 … 6=토. (1970-01-01=에폭 0=목요일, +4 보정.)
+ * "박물관 오늘 휴관?" 판정의 근간이라 상태 계산과 같은 정수 기반으로 둔다(자정 안 밀림).
+ */
+export function dayOfWeek(day: number): number {
+  return ((day % 7) + 4 + 7) % 7;
+}
+
+/**
+ * 그 날이 자기 달에서 몇 번째 같은 요일인지(1~5). 예: 첫째 월요일이면 1.
+ * "매월 첫째 화요일 휴관" 같은 서수 규칙 판정에 쓴다. 전부 KST 달력 기준.
+ */
+export function nthWeekdayOfMonth(day: number): number {
+  const dom = Number(dayToYmd(day).slice(6, 8));
+  return Math.floor((dom - 1) / 7) + 1;
+}
+
+/** 그 날이 자기 달에서 **마지막** 같은 요일인지(다음 주 같은 요일이 달을 넘기면 true). */
+export function isLastWeekdayOfMonth(day: number): boolean {
+  const ymd = dayToYmd(day);
+  const nextWeek = dayToYmd(day + 7);
+  // 7일 뒤가 다른 달이면 이번이 그 요일의 마지막.
+  return ymd.slice(0, 6) !== nextWeek.slice(0, 6);
+}
+
+/** 에폭 일수 → 월(1~12). 서수·계절 판정용. */
+export function monthOf(day: number): number {
+  return Number(dayToYmd(day).slice(4, 6));
+}
+
 /** 에폭 일수 → `20260901`. */
 export function dayToYmd(day: number): string {
   const date = new Date(day * DAY_MS);

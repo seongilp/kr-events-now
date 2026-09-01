@@ -102,6 +102,32 @@ export interface Dict {
   /** 데이터 출처 */
   dataSource: string;
   langLabel: string;
+  /** ── 박물관 레이어 ── */
+  layerFestivals: string;
+  layerMuseums: string;
+  kindMuseum: string;
+  kindGallery: string;
+  filterAllMuseums: string;
+  filterOpenToday: string;
+  nearbyMuseums: string;
+  placesCount: (n: number) => string;
+  /** 개관 상태 배지(세 상태를 명확히 구분, 결측을 값인 척 금지) */
+  openToday: string;
+  closedToday: string;
+  hoursUnknown: string;
+  /** "오늘 여는 곳" 필터에서 판정 불가로 제외/포함된 건수 고지 */
+  undeterminedNote: (n: number) => string;
+  /** 개관 판정의 한계 고지(주간 휴관일 기준, 공휴일·특별휴관 미확인) */
+  openStateDisclaimer: string;
+  /** 상세 시트 필드 */
+  detailHours: string;
+  detailFee: string;
+  detailParking: string;
+  detailClosedDays: string;
+  closureRawUnavailable: string;
+  emptyMuseums: string;
+  emptyMuseumsHint: string;
+  museumsLandingHint: string;
 }
 
 const en: Dict = {
@@ -146,6 +172,31 @@ const en: Dict = {
   useMyLocation: 'Use my location',
   dataSource: 'Data: Korea Tourism Organization (TourAPI)',
   langLabel: 'Language',
+  layerFestivals: 'Festivals',
+  layerMuseums: 'Museums',
+  kindMuseum: 'Museum',
+  kindGallery: 'Art gallery',
+  filterAllMuseums: 'All',
+  filterOpenToday: 'Open today',
+  nearbyMuseums: 'Nearby museums',
+  placesCount: (n) => (n === 1 ? '1 place' : `${n} places`),
+  openToday: 'Open today',
+  closedToday: 'Closed today',
+  hoursUnknown: 'Hours unclear',
+  undeterminedNote: (n) =>
+    n === 1
+      ? "1 place isn't shown because its closing days couldn't be read"
+      : `${n} places aren't shown because their closing days couldn't be read`,
+  openStateDisclaimer:
+    'Open/closed is judged from weekly closing days only. Public holidays and special closures are not checked — always confirm the closing days below.',
+  detailHours: 'Opening hours',
+  detailFee: 'Admission',
+  detailParking: 'Parking',
+  detailClosedDays: 'Closing days',
+  closureRawUnavailable: 'Closing days not available in English.',
+  emptyMuseums: 'No museums here in this view',
+  emptyMuseumsHint: 'Turn off “Open today”, or move the map to another area.',
+  museumsLandingHint: 'See which museums are open today — Mondays trip up many travelers.',
 };
 
 const ja: Dict = {
@@ -190,6 +241,28 @@ const ja: Dict = {
   useMyLocation: '現在地を使う',
   dataSource: 'データ:韓国観光公社(TourAPI)',
   langLabel: '言語',
+  layerFestivals: 'お祭り',
+  layerMuseums: '博物館・美術館',
+  kindMuseum: '博物館',
+  kindGallery: '美術館',
+  filterAllMuseums: 'すべて',
+  filterOpenToday: '本日開館',
+  nearbyMuseums: '近くの博物館・美術館',
+  placesCount: (n) => `${n}件`,
+  openToday: '本日開館',
+  closedToday: '本日休館',
+  hoursUnknown: '休館日不明',
+  undeterminedNote: (n) => `休館日を判定できなかった${n}件は表示していません`,
+  openStateDisclaimer:
+    '開館・休館の判定は毎週の定休日のみに基づきます。祝日や臨時休館は確認していません — 必ず下記の休館日をご確認ください。',
+  detailHours: '開館時間',
+  detailFee: '料金',
+  detailParking: '駐車場',
+  detailClosedDays: '休館日',
+  closureRawUnavailable: '休館日情報は日本語では提供されていません。',
+  emptyMuseums: 'この範囲に博物館・美術館はありません',
+  emptyMuseumsHint: '「本日開館」をオフにするか、地図を別の地域へ動かしてください。',
+  museumsLandingHint: '今日どの博物館が開いているかが分かります — 月曜休館で無駄足になりがちです。',
 };
 
 const zhCN: Dict = {
@@ -234,6 +307,28 @@ const zhCN: Dict = {
   useMyLocation: '使用我的位置',
   dataSource: '数据:韩国观光公社(TourAPI)',
   langLabel: '语言',
+  layerFestivals: '庆典活动',
+  layerMuseums: '博物馆·美术馆',
+  kindMuseum: '博物馆',
+  kindGallery: '美术馆',
+  filterAllMuseums: '全部',
+  filterOpenToday: '今日开放',
+  nearbyMuseums: '附近的博物馆',
+  placesCount: (n) => `${n} 处`,
+  openToday: '今日开放',
+  closedToday: '今日闭馆',
+  hoursUnknown: '闭馆日不明',
+  undeterminedNote: (n) => `有 ${n} 处因无法判断闭馆日而未显示`,
+  openStateDisclaimer:
+    '开放/闭馆仅依据每周固定闭馆日判断。未核查公休日与临时闭馆 — 请务必确认下方的闭馆日。',
+  detailHours: '开放时间',
+  detailFee: '门票',
+  detailParking: '停车',
+  detailClosedDays: '闭馆日',
+  closureRawUnavailable: '暂无简体中文的闭馆日信息。',
+  emptyMuseums: '此范围内没有博物馆或美术馆',
+  emptyMuseumsHint: '关闭“今日开放”，或将地图移到其他区域。',
+  museumsLandingHint: '查看今天哪些博物馆开放 — 周一闭馆常让游客白跑一趟。',
 };
 
 const zhTW: Dict = {
@@ -278,6 +373,28 @@ const zhTW: Dict = {
   useMyLocation: '使用我的位置',
   dataSource: '資料:韓國觀光公社(TourAPI)',
   langLabel: '語言',
+  layerFestivals: '慶典活動',
+  layerMuseums: '博物館·美術館',
+  kindMuseum: '博物館',
+  kindGallery: '美術館',
+  filterAllMuseums: '全部',
+  filterOpenToday: '今日開放',
+  nearbyMuseums: '附近的博物館',
+  placesCount: (n) => `${n} 處`,
+  openToday: '今日開放',
+  closedToday: '今日休館',
+  hoursUnknown: '休館日不明',
+  undeterminedNote: (n) => `有 ${n} 處因無法判斷休館日而未顯示`,
+  openStateDisclaimer:
+    '開放/休館僅依據每週固定休館日判斷。未查核國定假日與臨時休館 — 請務必確認下方的休館日。',
+  detailHours: '開放時間',
+  detailFee: '門票',
+  detailParking: '停車',
+  detailClosedDays: '休館日',
+  closureRawUnavailable: '暫無繁體中文的休館日資訊。',
+  emptyMuseums: '此範圍內沒有博物館或美術館',
+  emptyMuseumsHint: '關閉「今日開放」,或將地圖移到其他區域。',
+  museumsLandingHint: '查看今天哪些博物館開放 — 週一休館常讓遊客白跑一趟。',
 };
 
 export const DICT: Record<Locale, Dict> = { en, ja, 'zh-CN': zhCN, 'zh-TW': zhTW };

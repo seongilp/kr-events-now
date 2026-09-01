@@ -18,6 +18,14 @@ export function phaseLabel(status: FestivalStatus, d: Dict): string {
   }
 }
 
+/** 상태별 지도 마커 색(hex). 배지 클래스(phaseBadgeClass)와 의미가 일치한다. */
+export const PHASE_COLOR: Record<EventPhase, string> = {
+  ongoing: '#22c55e', // 진행중 — 초록
+  today: '#f59e0b', // 오늘 마감 — 주황
+  upcoming: '#3b82f6', // 예정 — 파랑(토스 블루 계열)
+  ended: '#6b7280', // 종료 — 회색(보통 필터로 안 보임)
+};
+
 /** 배지 색 클래스(다크모드 기준). 지도 색과 의미가 일치한다. */
 export function phaseBadgeClass(phase: EventPhase): string {
   switch (phase) {

@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { CalendarClock, MapPin, Navigation } from 'lucide-react';
+import { CalendarClock, Landmark, MapPin, Navigation } from 'lucide-react';
 
 import { dict, isLocale, LOCALES, LOCALE_LABEL, type Locale } from '@/lib/i18n';
 import { buttonVariants } from '@/components/ui/button';
@@ -65,6 +65,10 @@ export default async function Landing({ params }: { params: Promise<{ lang: stri
           <li className="flex items-start gap-3">
             <MapPin className="mt-0.5 size-5 shrink-0 text-primary" />
             <span className="text-muted-foreground">{d.nearbyEvents} · {d.sortByDistance}</span>
+          </li>
+          <li className="flex items-start gap-3">
+            <Landmark className="mt-0.5 size-5 shrink-0 text-primary" />
+            <span className="text-muted-foreground">{d.museumsLandingHint}</span>
           </li>
         </ul>
       </div>
