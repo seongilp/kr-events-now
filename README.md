@@ -1,4 +1,4 @@
-# KR Events Now
+# 축제나우 (Events Now)
 
 **What's on near you, right now** — festivals and events happening over the next two
 weeks around you, on a map, in your language. Built for foreign travelers in Korea.

@@ -131,7 +131,7 @@ export interface Dict {
 }
 
 const en: Dict = {
-  appName: 'KR Events Now',
+  appName: 'Events Now',
   tagline: "What's on near you, right now",
   heroTitle: 'Festivals & events near you, in your language',
   heroSubtitle:
@@ -200,7 +200,7 @@ const en: Dict = {
 };
 
 const ja: Dict = {
-  appName: 'KR Events Now',
+  appName: 'イベントナウ',
   tagline: '今、あなたの近くで開催中',
   heroTitle: 'あなたの近くのお祭り・イベントを、あなたの言語で',
   heroSubtitle:
@@ -266,7 +266,7 @@ const ja: Dict = {
 };
 
 const zhCN: Dict = {
-  appName: 'KR Events Now',
+  appName: '活动Now',
   tagline: '此刻，你附近正在举办',
   heroTitle: '用你的语言，发现你附近的庆典与活动',
   heroSubtitle:
@@ -332,7 +332,7 @@ const zhCN: Dict = {
 };
 
 const zhTW: Dict = {
-  appName: 'KR Events Now',
+  appName: '活動Now',
   tagline: '此刻,你附近正在舉辦',
   heroTitle: '用你的語言,發現你附近的慶典與活動',
   heroSubtitle:
